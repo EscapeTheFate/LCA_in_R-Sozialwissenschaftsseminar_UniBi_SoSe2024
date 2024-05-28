@@ -3,11 +3,7 @@
 library(poLCA)
 library(dplyr)
 library(tidyverse)
-if (!require("poLCA") & !require(dplyr) & !require(tidyverse) & !require(tidyLPA) & !require(randomLCA) & !require(depmixS4)){
-  install.packages("tidyLPA")
-  install.packages("randomLCA")
-  install.packages("depmixS4")
-}
+
 
 # Laden eines Beispieldatensatzes (durch poLCA - Dayton (1998, 33 and 85))
 data(cheating) 
