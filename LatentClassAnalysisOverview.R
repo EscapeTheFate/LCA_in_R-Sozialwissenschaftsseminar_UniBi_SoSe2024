@@ -4,10 +4,9 @@ library(poLCA)
 library(dplyr)
 library(tidyverse)
 
-
 # Laden eines Beispieldatensatzes (durch poLCA - Dayton (1998, 33 and 85))
-data(cheating) 
-attach(cheating)
+?cheating
+data(cheating, package = "poLCA")
 
 # Information zum Datensatz:
 # Dichotomous responses by 319 undergraduates to questions about cheating be-
@@ -37,18 +36,25 @@ f <- cbind(LIEEXAM, LIEPAPER, FRAUD, COPYEXAM) ~ 1 # Basic latent class Analysis
 # Schätzen eines latenten Klassenmodells ----------------------------------
 ?poLCA()
 
-mod1 <- poLCA(formula = f, data = cheating, nclass = 1, maxiter = 3000, 
+mod1 <- poLCA(formula = f, data = cheating, nclass = 1, maxiter = 3000,   
              graphs = F, na.rm = T, probs.start = NULL, nrep = 1)
-mod2 <- poLCA(formula = f, data = cheating, nclass = 2, maxiter = 3000, 
-              graphs = T, nrep = 10, na.rm = F)
-mod3 <- poLCA(formula = f, data = cheating, nclass = 3, maxiter = 3000, 
+mod2 <- poLCA(formula = f, data = cheating, nclass = 2, maxiter = 3000,  
+              graphs = T, nrep = 10)
+mod3 <- poLCA(formula = f, data = cheating, nclass = 3, maxiter = 3000,   # Maximum Likelihood nicht gefunden
               graphs = T, nrep = 10)
 
 # Standardwert: nclass = 2; nclass = 1 für log-lin. unabh. Modell (Werte = nimmt 
-# lediglich wahre Anteilwerte des vorliegenden Datensatzes; Siehe: mod1$numiter)
+# lediglich wahre Anteilwerte des vorliegenden Datensatzes)
+# Siehe: 
+mod1$numiter
+# und vergleiche auch folgendes zum 1 Klassen Modell:
+mod1
+dim(filter(cheating, LIEEXAM == 1))[1]/dim(cheating)[1]
 
 # Je mehr Klassen bzw. zusätzliche erklärende Variablen, desto kleiner die
-# Degrees of Freedom. Falls diese negativ sind => Modell nicht eindeutig schätzbar
+# Degrees of Freedom. Falls diese sehr gering (1 oder 0) oder negativ sind 
+# => Modell nicht eindeutig schätzbar
+mod3 <- poLCA(formula = f, data = cheating, nclass = 3)
 mod4 <- poLCA(formula = f, data = cheating, nclass = 4) # Error: Negative DoF
 
 
@@ -65,7 +71,7 @@ pruefgroeßen <- function(mod){
              crit.val95 = qchisq(0.95, df = mod$resid.df),
              p.Gsq.val95 = 1-pchisq(mod$Gsq, df = mod$resid.df),
              p.Chisq.val95 = 1-pchisq(mod$Chisq, df = mod$resid.df),
-             Entropy = poLCA.entropy(mod),
+             Abs.Entropy = poLCA.entropy(mod),
              row.names = deparse(substitute(mod)))
         , 3) # <--- Rundungszahl
 }
@@ -84,7 +90,8 @@ rbind(pruefgroeßen(mod1), pruefgroeßen(mod2), pruefgroeßen(mod3)) # Wir wähl
 mod2$Chisq
 qchisq(0.95, df = mod2$resid.df) # Kritischer Wert bei 12.59159
 1-pchisq(mod2$Chisq, df = mod2$resid.df) # < 0.05? => Nein, d.h. nicht signifikant
-                                         # => Erw. Werte = geschätzte Werte
+                                         # => D.h.: Erw. Werte = geschätzte Werte 
+                                         # => D.h.: Guter Modellfit (Aber: Beachte Annahmen)
 
 
 # Hilfreiche Output-Daten -------------------------------------------------
@@ -99,47 +106,65 @@ mod2$llik # Likelihood
 
 
 ### Klassenhäufigkeiten:
-mod2$P # (tatsächliche) latente Klassenanteile nach Modell (nicht erwartete Anzahl nach Modell)
-round(mod2$P * mod2$N,0) # Personen pro Klasse
-mod2$predcell # Klassentabelle - Modell-Häufigkeiten vs. Erwartete Häufigkeiten
-mod2$predclass # Klassentabelle - det. Klassenzugehörigkeiten
-poLCA.predcell(lc = mod2, y = c(1,2,1,2)) # erwartete Anteil an Observationen
-# mit dieser Ausprägung in manifesten Variablen (mal mod2$N für erwartete Anzahl)
-poLCA.predcell(lc = mod2, y = rbind(c(1,1,1,1), c(1,1,1,2))) # mehrere gleichzeitig
+mod2$P # prognostizierte Modellzugehörigkeiten nach "1/Klassen"-Grenze (nicht erwartete Anzahl nach Verteilungen)
+round(mod2$P * mod2$N,0) # Absolute Personen pro Klasse
+mod2$predcell # Klassentabelle - Modell-Häufigkeiten vs. Erwartete Häufigkeiten zu Chi^2
+mod2$predclass # Klassentabelle - det. Klassenzugehörigkeiten nach "1/Klassen"-Grenze
+# Prognostizierte (relative) Zellenanteile für bestimmte Ausprägungen (mal mod2$N für erwartete Anzahl)
+poLCA.predcell(lc = mod2, y = c(1,2,1,2)) # = 0.01603409 => 0.016 * N = ~5 Personen mit dieser Ausprägung
+poLCA.predcell(lc = mod2, y = rbind(c(1,1,1,1), c(1,1,1,2))) # auch mehrere gleichzeitig
 
 
 ### Für weitere Analysen mit Wahrscheinlichkeiten:
 # Bedingte Wahrscheinlichkeitsübersicht:
-mod2$probs # Liste von geschätzten klassen-bed.Ausprägungsw.keiten pi^(hat)_jrk
-mod2$probs$LIEEXAM # Explizites Beispiel
+mod2$probs # Liste von geschätzten klassen-bed. Ausprägungswahrscheinlichkeiten 
+mod2$probs$LIEEXAM # Für "LIEEXAM" Variable
 mod2$probs.se # Standardfehler von geschätzten klassen-bed. Ausprägungsw.keiten
-poLCA.table(formula = LIEEXAM ~ 1, condition = list(LIEPAPER = 2, # Häufigkeiten
+# Häufigkeitstabelle für jeweiligen Ausprägungen
+poLCA.table(formula = LIEEXAM ~ LIEPAPER, condition = list(), lc = mod2) 
+poLCA.table(formula = LIEEXAM ~ LIEPAPER, condition = list(FRAUD = 1,
+                                                           COPYEXAM = 2), lc = mod2) 
+poLCA.table(formula = LIEEXAM ~ 1, condition = list(LIEPAPER = 1, 
                                                     FRAUD = 1,
                                                     COPYEXAM = 2),
                                                     lc = mod2)
-poLCA.table(formula = LIEEXAM ~ LIEPAPER, condition = list(), lc = mod2) # Häufigkeiten
 
 
 ### Wahrscheinlichkeiten für jede beobachtete Observation im Datensatz:
 mod2$posterior # (N x R)-matrix von (posterior) Klassenzugehörigkeitsw.keit
+# Hinzufügen der Wahrscheinlichkeiten & det. Klassenzugehörigkeit zum Datensatz
 cheating <- cbind(cheating, mod2$posterior, mod2$predclass)
 names(cheating)[6:8] <- c("C1.prob", "C2.prob", "Det.Class")
 head(cheating)
 # Analog zu bevor, aber für eigene Werte (äquivalent zu predict()-Funktion)
 ?poLCA.posterior() 
-poLCA.posterior(mod2, y = c(1,1,1,1))
+poLCA.posterior(mod2, y = c(1,1,1,1)) # Posterior W.keit für Ausprägung (1, 1, 1, 1)
+
 
 
 ### Histogramme
 ind <- which(cheating$Det.Class == 1)
 par(mfrow = c(2,1)) # 2 Grafiken übereinander
+
 # Für erste Posteriori Wahrscheinlichkeit (Alle Obs. & Klassen-bed.)
-hist(x = cheating$C1.prob, breaks = seq(from = 0, to = 1, by = 0.1))
-hist(x = cheating$C1.prob[ind], breaks = seq(from = 0, to = 1, by = 0.1))
+hist(x = cheating$C1.prob, breaks = seq(from = 0, to = 1, by = 0.1),
+     main = "Wahrscheinlichkeiten für Klasse 1 über allen Observationen",
+     xlab = "Wahrscheinlichkeit für Klasse 1")
+hist(x = cheating$C1.prob[ind], breaks = seq(from = 0, to = 1, by = 0.1),
+     main = "Wahrscheinlichkeiten für Klasse 1 über Klasse 1 zugeordneten Observationen",
+     xlab = "Wahrscheinlichkeit für Klasse 1")
+
+
 # Für zweite Posteriori Wahrscheinlichkeit (Alle Obs. & Klassen-bed.)
-hist(x = cheating$C2.prob, breaks = seq(from = 0, to = 1, by = 0.1))
-hist(x = cheating$C2.prob[-ind], breaks = seq(from = 0, to = 1, by = 0.1))
+hist(x = cheating$C2.prob, breaks = seq(from = 0, to = 1, by = 0.1),
+     main = "Wahrscheinlichkeiten für Klasse 2 über allen Observationen",
+     xlab = "Wahrscheinlichkeit für Klasse 2")
+hist(x = cheating$C2.prob[-ind], breaks = seq(from = 0, to = 1, by = 0.1),
+     main = "Wahrscheinlichkeiten für Klasse 2 über Klasse 2 zugeordneten Observationen",
+     xlab = "Wahrscheinlichkeit für Klasse 2")
 par(mfrow = c(1,1)) # Grafiksetting zurücksetzen
+
+
 
 # Klassenmittelwerte berechnen --------------------------------------------
 calc.class.means <- function(mod){
@@ -156,7 +181,9 @@ calc.class.means <- function(mod){
   }
   round(output,3)
 }
+
 calc.class.means(mod2)
+
 
 
 # Advanced latente Klassenregression --------------------------------------
@@ -166,13 +193,15 @@ mod2.reg <- poLCA(formula = g, data = cheating, nclass = 2, maxiter = 5000,
 rbind(pruefgroeßen(mod2), pruefgroeßen(mod2.reg))
 
 
+
 # Analyse der Überlappung -------------------------------------------------
 
 # Überlappungsanteil entscheidend für die Konvergenz und Stabilität der Ergeb-
-# nisse der latenten Profilanalyse
+# nisse der latenten Klassen- und Profilanalyse
 
 # Einfache (Grobab-)Schätzung des Überlappungsanteils:
-# Bei K = 2 Klassen aber nicht sinnvoll, weil Grenzen bei 1/K = 50% gesetzt werden
+# Bei K = 2 Klassen aber nicht sinnvoll, weil Grenzen bei 1/K = 50% gesetzt würde
+# => Deshalb bei 2 Klassen eine (selbstgewählte) Grenze von 40%
 overlap.rough <- function(mod){
   n = mod$N
   K_div = K = length(mod$P)
@@ -185,7 +214,6 @@ overlap.rough <- function(mod){
   }
   df <- df[,(K+1):(K+K)]
   df <- df %>% group_by_all() %>% summarise(n = n()) %>% arrange(n)
-  # names(df)[1:K] <- ""
   for (i in 1:K){
   names(df)[i] <- paste("C",i, sep = '') 
   }
@@ -222,9 +250,10 @@ overlap.dunn(mod2)   # Nahe 1 = Fast keine Überlappung
 overlap.backer(mod3) # Nahe 1 = Fast keine Überlappung
 
 
-# Durchschnittliche Posterior Klassenwahrscheinlichkeiten
+# Durchschnittliche Posterior Klassenwahrscheinlichkeiten nach Klassen
 round(aggregate(x = mod2$posterior, by = list(mod2$predclass), FUN = "mean"), 2
-)
+) # d.h. Personen, die zu Klasse 1 zugeordnet werden, haben durchschnittlich 
+# eine W.keit von 0.78 für Klasse 1 und 0.22 für Klasse 2
 
 # Posterior Wahrscheinlichkeiten summiert + Ratio:
 posterior.sum.table <- function(mod){
@@ -235,18 +264,7 @@ posterior.sum.table <- function(mod){
     index <- which(df[,length(mod$P)+1] == k) # lese det. Zugehörigkeiten aus
     foo[k] <- sum(df[index,k])
   }
-  
-  # df <- round(data.frame(post.prob.sum = apply(mod$posterior, 2, sum),
-  #            N = as.vector(table(mod$predclass)),
-  #            Ratio = apply(mod$posterior, 2, sum)/as.vector(table(mod$predclass)),
-  #            'I' = c(rep.int(0, length(mod$P))),
-  #            cond.post.prob.sum = foo,
-  #            N = as.vector(table(mod$predclass)),
-  #            cond.Ratio = foo/as.vector(table(mod$predclass)))
-  #       , 3)
-  # df[,4] <- c(rep("I", times = length(mod$P)))
-  # df
-  df1 <- round(data.frame(post.prob.sum = apply(mod$posterior, 2, sum),
+  df1 <- round(data.frame(all.post.prob.sum = apply(mod$posterior, 2, sum),
                          N = as.vector(table(mod$predclass)),
                          Ratio = apply(mod$posterior, 2, sum)/as.vector(table(mod$predclass)))
                , 3)
@@ -260,12 +278,13 @@ posterior.sum.table <- function(mod){
   print(df1)
   print(df2)
 }
-posterior.sum.table(mod3) # cond = berechnet bedingt auf Klassenzugehörigkeit K
+posterior.sum.table(mod2) # cond = berechnet bedingt auf Klassenzugehörigkeit K
 
 
 # Berechne klassischer Entropie Index & relativer Entropie Index:
 ?poLCA.entropy()
-poLCA.entropy(mod2) # Wert von 0-K; Kleine Zahl = Gut getrennte Daten
+poLCA.entropy(mod2) # Absolute Entropie: Wert von 0-K
+# => Kleine Zahl = Daten in Cluster entstammen derselben Gruppe (= gut & wenig Überlappung)
 
 relative.entropy <- function(mod) {
   1 - ((sum(-mod$posterior*log(mod$posterior)))/(nrow(mod$posterior)*log(ncol(mod$posterior))))
@@ -273,30 +292,10 @@ relative.entropy <- function(mod) {
 relative.entropy(mod2)
 
 
-# Überprüfung der Annahme der lokalen Unabhängigkeit ----------------------
-# Unfinished - Kapitel 14.5 - Bacher, J.; Pöge, A.; Wenzig, K. (2010): Cluster-
-# analyse. Anwendungsorientierte Einführung in Klassifikationsverfahren & 
-# alternativ Fahrmeir und Hamerle 1984, S. 74-75 für Details
-calc.poLCA.cov <- function(mod, class){
-  K <- length(mod$P) # Klassenanzahl
-  dim <- ncol(mod$y) # Anzahl manifeste Variablen
-  df <- cbind(mod$y, posterior = mod$posterior[,class], Det.Class = mod$predclass)
-  df <- df %>% filter(Det.Class == class) %>% na.omit() # Nur Obs. mit k = class
-  n_class <- sum(df$posterior) # gewichtete (nicht-NA) Obs.anzahl
-  cov_class <- cov.wt(df[,1:dim], wt = df$posterior)$cov # gew. COV
-  LQ <- -n_class * log(det(cov_class)) # LQ-Test Wert?
-  LQ
-}
-calc.poLCA.cov(mod2, class = 2)
-detach(cheating)
-
-
-
-
 
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
-# tidyLCA Package ---------------------------------------------------------
+# tidyLPA Package ---------------------------------------------------------
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
 library(tidyLPA)
@@ -344,14 +343,12 @@ compare_solutions(mod, statistics = c("CAIC", "BIC"))
 get_data(mod) # Daten samt Klassenwahrscheinlichkeiten und det. Zugehörigkeiten
 get_estimates(mod) # Übersicht der Schätzwerte
 
-### Übersichtsgrafik der Klassen und Mittelwerte 
+
+# Übersichtsgrafik der Klassen und Mittelwerte 
 plot(mod)
 plot_profiles(mod)
 plot_density(mod)
 plot_bivariate(mod$model_1_class_2)
-
-
-
 
 
 
@@ -372,8 +369,7 @@ dep.definition <- depmixS4::mix(list(LIEEXAM ~ 1, LIEPAPER ~ 1, FRAUD ~ 1, COPYE
                         data = cheating, # Datensatz für Modell
                         nstates = 2, # Anzahl an Klassen
                         prior =~ 1, # Ort für Kovariaten
-                        initdata = cheating # Datensatz für Wahrscheinlichkeiten
-)
+                        initdata = cheating) # Datensatz für Wahrscheinlichkeiten
 (mod.depmix <- fit(dep.definition, verbose = T, fixed = NULL, equal = NULL))
 
 # Zusammenfassung der (bed.) Klassenwahrscheinlichkeiten -------------------
@@ -406,7 +402,7 @@ depmixS4.plot.probs(mod.depmix) # Drück 'Zoom' für bessere Übersicht
 
 
 # Weiteres ----------------------------------------------------------------
-posterior(mod.depmix)
+posterior(mod.depmix) # Wahrscheinlichkeiten und Klassenzuordnungen (50% Grenze)
 
 
 
@@ -420,8 +416,11 @@ library(randomLCA)
 data(cheating, package = "poLCA")
 
 # (Basic) Latent Class Modell-Schätzung
-random.mod <- randomLCA(patterns = (cheating[,1:4]-1), nclass = 2, notrials = 10)
-summary(random.mod) # Outcome probabilities zeigen Wahrscheinlichkeiten für eine Ausprägung 
+random.mod <- randomLCA(patterns = (cheating[,1:4]-1), nclass = 2, notrials = 10) 
+# notrial = Anzahl zufälliger Startwerte;
+# Analog zu poLCA: Datensatz darf nur Dummyvariablen mit Werten gleich 0 & 1 haben
+
+summary(random.mod) # "Outcome probabilities" zeigen Ausprägungswahrscheinlichkeiten (Ausprägung = 1) an
 
 # Ausprägungswahrscheinlichkeiten innerhalb der Klassen
 outcomeProbs(random.mod) # Outcome Wahrscheinlichkeit + (hier fehlerhaften) Standardfehler
@@ -430,7 +429,7 @@ outcomeProbs(random.mod) # Outcome Wahrscheinlichkeit + (hier fehlerhaften) Stan
 outcomeProbs(random.mod, boot = TRUE) # Für bessere (Bootstrap-basierte) Standardfehler
 
 # Plot die Ausprägungswahrscheinlichkeiten innerhalb der Klassen
-plot(random.mod, type = "b", pch = 1:2, xlab = "Test",
+plot(random.mod, type = "b", pch = 1:2, xlab = "Variables",
      ylab = "Outcome Probability",
      scales = list(x = list(at = 1:4, labels = names(cheating)[1:4])),
      key = list(corner = c(0.05, .95), border = TRUE, cex = 1.2,
